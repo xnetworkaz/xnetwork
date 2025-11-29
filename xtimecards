@@ -12,8 +12,157 @@
 (function() {
     'use strict';
 
-    console.log('X Time Cards script loaded ✔');
+    function init() {
+        if (document.getElementById('x-time-cards-menu')) return;
 
-    // Place your functions here —
-    // Tell me what you want it to do and I'll code it fully.
+        var menu = document.createElement('div');
+        menu.id = 'x-time-cards-menu';
+        menu.style.position = 'fixed';
+        menu.style.bottom = '20px';
+        menu.style.right = '20px';
+        menu.style.background = '#ffffff';
+        menu.style.borderRadius = '16px';
+        menu.style.boxShadow = '0 4px 16px rgba(0,0,0,0.18)';
+        menu.style.padding = '14px 16px';
+        menu.style.zIndex = '999999';
+        menu.style.fontFamily = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        menu.style.minWidth = '180px';
+        menu.style.maxWidth = '260px';
+        menu.style.border = '1px solid rgba(0,0,0,0.06)';
+        menu.style.display = 'flex';
+        menu.style.flexDirection = 'column';
+        menu.style.gap = '8px';
+
+        var headerRow = document.createElement('div');
+        headerRow.style.display = 'flex';
+        headerRow.style.alignItems = 'center';
+        headerRow.style.justifyContent = 'space-between';
+        headerRow.style.marginBottom = '4px';
+
+        var title = document.createElement('div');
+        title.textContent = 'X Time Cards';
+        title.style.fontWeight = '700';
+        title.style.fontSize = '14px';
+
+        var closeBtn = document.createElement('button');
+        closeBtn.textContent = '×';
+        closeBtn.style.border = 'none';
+        closeBtn.style.background = 'transparent';
+        closeBtn.style.cursor = 'pointer';
+        closeBtn.style.fontSize = '16px';
+        closeBtn.style.lineHeight = '16px';
+        closeBtn.style.padding = '0';
+        closeBtn.style.marginLeft = '8px';
+        closeBtn.style.color = '#555';
+
+        closeBtn.addEventListener('mouseenter', function() {
+            closeBtn.style.color = '#000';
+        });
+        closeBtn.addEventListener('mouseleave', function() {
+            closeBtn.style.color = '#555';
+        });
+        closeBtn.addEventListener('click', function() {
+            menu.remove();
+        });
+
+        headerRow.appendChild(title);
+        headerRow.appendChild(closeBtn);
+
+        var subtitle = document.createElement('div');
+        subtitle.textContent = 'Quick menu';
+        subtitle.style.fontSize = '12px';
+        subtitle.style.color = '#666';
+        subtitle.style.marginBottom = '4px';
+
+        var btnContainer = document.createElement('div');
+        btnContainer.style.display = 'flex';
+        btnContainer.style.flexDirection = 'column';
+        btnContainer.style.gap = '6px';
+
+        function makeButton(label) {
+            var b = document.createElement('button');
+            b.textContent = label;
+            b.style.width = '100%';
+            b.style.border = '1px solid rgba(0,0,0,0.08)';
+            b.style.borderRadius = '999px';
+            b.style.padding = '6px 10px';
+            b.style.fontSize = '12px';
+            b.style.cursor = 'pointer';
+            b.style.background = '#f8f8f8';
+            b.style.textAlign = 'center';
+            b.style.transition = 'background 0.15s ease, transform 0.05s ease, box-shadow 0.15s ease';
+            b.addEventListener('mouseenter', function() {
+                b.style.background = '#f0f0f0';
+                b.style.boxShadow = '0 2px 6px rgba(0,0,0,0.08)';
+            });
+            b.addEventListener('mouseleave', function() {
+                b.style.background = '#f8f8f8';
+                b.style.boxShadow = 'none';
+                b.style.transform = 'scale(1)';
+            });
+            b.addEventListener('mousedown', function() {
+                b.style.transform = 'scale(0.98)';
+            });
+            b.addEventListener('mouseup', function() {
+                b.style.transform = 'scale(1)';
+            });
+            return b;
+        }
+
+        var btn1 = makeButton('Option 1');
+        var btn2 = makeButton('Option 2');
+        var btn3 = makeButton('Option 3');
+
+        btnContainer.appendChild(btn1);
+        btnContainer.appendChild(btn2);
+        btnContainer.appendChild(btn3);
+
+        menu.appendChild(headerRow);
+        menu.appendChild(subtitle);
+        menu.appendChild(btnContainer);
+
+        document.body.appendChild(menu);
+
+        var isDragging = false;
+        var offsetX = 0;
+        var offsetY = 0;
+
+        headerRow.style.cursor = 'move';
+
+        headerRow.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            offsetX = e.clientX - menu.getBoundingClientRect().left;
+            offsetY = e.clientY - menu.getBoundingClientRect().top;
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+
+        function onMouseMove(e) {
+            if (!isDragging) return;
+            var x = e.clientX - offsetX;
+            var y = e.clientY - offsetY;
+            var maxX = window.innerWidth - menu.offsetWidth - 4;
+            var maxY = window.innerHeight - menu.offsetHeight - 4;
+            if (x < 4) x = 4;
+            if (y < 4) y = 4;
+            if (x > maxX) x = maxX;
+            if (y > maxY) y = maxY;
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            menu.style.right = 'auto';
+            menu.style.bottom = 'auto';
+        }
+
+        function onMouseUp() {
+            isDragging = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();
