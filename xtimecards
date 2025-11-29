@@ -1,0 +1,19 @@
+// ==UserScript==
+// @name         X Time Cards
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  idk tbh
+// @author       You
+// @match        https://*.dayforcehcm.com/*
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=dayforcehcm.com
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    console.log('X Time Cards script loaded ✔');
+
+    // Place your functions here —
+    // Tell me what you want it to do and I'll code it fully.
+})();
