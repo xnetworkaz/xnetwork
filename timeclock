@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>X Network Kiosk</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+
+<style>
+:root{
+  --bg:#07090c;
+  --panel:#0d1118;
+  --border:#1a2330;
+  --text:#ffffff;
+  --muted:rgba(255,255,255,.75);
+  --ok:#2aa30f;
+  --bad:#c81f1a;
+  --header-h:56px;
+  --footer-h:86px;
+}
+*{ box-sizing:border-box; }
+html,body{ height:100%; margin:0; }
+body{ background:var(--bg); color:var(--text); font-family: Arial, sans-serif; overflow:hidden; }
+.app{ height:100vh; display:flex; flex-direction:column; }
+
+.header{
+  height:var(--header-h);
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 18px;
+  width:100%;
+}
+.brand{ font-weight:900; letter-spacing:1.2px; font-size:18px; }
+.subbrand{ font-weight:800; font-size:13px; color:var(--muted); }
+
+.main{ flex:1; display:flex; align-items:center; justify-content:center; padding:22px; }
+.grid{
+  width:100%;
+  height:100%;
+  max-width:1200px;
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  grid-template-rows:repeat(2,1fr);
+  gap:18px;
+}
+.tile{
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  user-select:none;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 10px 28px rgba(0,0,0,.35);
+  transition: transform .08s ease, opacity .15s ease;
+}
+.tile:active{ transform:scale(0.985); }
+.tile h2{ margin:0; font-size:34px; font-weight:900; }
+.tile p{ margin:10px 0 0 0; color:var(--muted); font-weight:700; font-size:14px; }
+.tile.disabled{ opacity:.35; pointer-events:none; }
+.tile.clockin{ border-color: rgba(42,163,15,.35); }
+.tile.meal{ border-color: rgba(255,255,255,.18); }
+.tile.clockout{ border-color: rgba(200,31,26,.35); }
+.tile.timesheet{ border-color: rgba(255,255,255,.18); }
+
+.footer{
+  height:var(--footer-h);
+  background:var(--panel);
+  border-top:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  width:100%;
+}
+.cell{
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 16px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.divider{ width:1px; height:100%; background:var(--border); }
+.left{ min-width:150px; justify-content:flex-start; font-size:14px; color:var(--muted); }
+.status{ min-width:180px; gap:10px; }
+.status.ok{ background:rgba(42,163,15,.25); }
+.status.bad{ background:rgba(200,31,26,.25); }
+.pill{
+  width:18px; height:18px; border-radius:50%;
+  background:#fff; color:#000;
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:900;
+}
+.company{ flex:1; font-size:18px; }
+.device{ min-width:240px; font-size:18px; }
+.datetime{ min-width:260px; justify-content:flex-end; flex-direction:column; align-items:flex-end; }
+.time{ font-size:28px; font-weight:900; }
+.date{ font-size:14px; color:var(--muted); }
+
+.modal-backdrop{
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.55);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  z-index:99999;
+}
+.modal{
+  width:min(720px,92vw);
+  background:#0f1520;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:18px;
+  box-shadow:0 18px 60px rgba(0,0,0,.6);
+  overflow:hidden;
+}
+.modal-header{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 18px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.modal-title{ font-size:20px; font-weight:900; }
+.modal-close{
+  width:42px; height:42px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.06);
+  color:#fff; font-size:20px; font-weight:900;
+  display:flex; align-items:center; justify-content:center;
+  user-select:none;
+}
+.modal-close:active{ transform:scale(0.98); }
+.modal-body{ padding:22px 18px 18px 18px; text-align:center; }
+.scan{ font-size:34px; font-weight:950; margin:6px 0 10px 0; }
+.scan-sub{ color:var(--muted); font-weight:800; font-size:14px; }
+.badge-preview{ margin-top:18px; font-size:24px; font-weight:950; letter-spacing:2px; color:rgba(255,255,255,.92); }
+.msg{ margin-top:14px; font-weight:900; font-size:16px; }
+.msg.ok{ color:var(--ok); }
+.msg.bad{ color:var(--bad); }
+</style>
+</head>
+
+<body>
+<div class="app">
+  <div class="header">
+    <div class="brand">X NETWORK</div>
+    <div class="subbrand" id="siteLabel">Site —</div>
+  </div>
+
+  <div class="main">
+    <div class="grid">
+      <div class="tile clockin disabled" id="btnClockIn"><h2>Clock In</h2><p>Tap to scan badge</p></div>
+      <div class="tile meal disabled" id="btnMeal"><h2>Meal In/Out</h2><p>Tap to scan badge</p></div>
+      <div class="tile clockout disabled" id="btnClockOut"><h2>Clock Out</h2><p>Tap to scan badge</p></div>
+      <div class="tile timesheet disabled" id="btnTimesheet"><h2>Timesheet</h2><p>Coming next</p></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="cell left" id="buildVersion">v—</div>
+    <div class="divider"></div>
+
+    <div class="cell status bad" id="statusCell">
+      <div class="pill" id="statusIcon">×</div>
+      <div id="statusText">Loading…</div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="cell company" id="companyCell">—</div>
+    <div class="divider"></div>
+    <div class="cell device" id="deviceCell">—</div>
+    <div class="divider"></div>
+
+    <div class="cell datetime">
+      <div class="time" id="time">—</div>
+      <div class="date" id="date">—</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="scanModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="scanTitle">Scan</div>
+      <div class="modal-close" id="scanClose">X</div>
+    </div>
+    <div class="modal-body">
+      <div class="scan">Scan badge…</div>
+      <div class="scan-sub" id="scanSub">Numbers only. Auto-submit when scan finishes.</div>
+      <div class="badge-preview" id="badgePreview">—</div>
+      <div class="msg" id="scanMsg"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyA9pmncOXX7TO7OZtGIp6KkOFe4OBOB0D8",
+  authDomain: "kiosks-996fc.firebaseapp.com",
+  projectId: "kiosks-996fc",
+  storageBucket: "kiosks-996fc.firebasestorage.app",
+  messagingSenderId: "775025800696",
+  appId: "1:775025800696:web:906dd8e4b3d2bfc7aed20d"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+const buildVersionEl = document.getElementById("buildVersion");
+const statusCell = document.getElementById("statusCell");
+const statusIcon = document.getElementById("statusIcon");
+const statusText = document.getElementById("statusText");
+const companyCell = document.getElementById("companyCell");
+const deviceCell = document.getElementById("deviceCell");
+const siteLabel = document.getElementById("siteLabel");
+const timeEl = document.getElementById("time");
+const dateEl = document.getElementById("date");
+
+const btnClockIn = document.getElementById("btnClockIn");
+const btnMeal = document.getElementById("btnMeal");
+const btnClockOut = document.getElementById("btnClockOut");
+const btnTimesheet = document.getElementById("btnTimesheet");
+
+const scanModal = document.getElementById("scanModal");
+const scanClose = document.getElementById("scanClose");
+const scanTitle = document.getElementById("scanTitle");
+const scanSub = document.getElementById("scanSub");
+const badgePreview = document.getElementById("badgePreview");
+const scanMsg = document.getElementById("scanMsg");
+
+function safeStr(v){ return (v === undefined || v === null) ? "" : String(v); }
+
+function setStatus(online){
+  if(online){
+    statusCell.className = "cell status ok";
+    statusIcon.textContent = "✓";
+    statusText.textContent = "Online";
+  }else{
+    statusCell.className = "cell status bad";
+    statusIcon.textContent = "×";
+    statusText.textContent = "Not Authorized";
+  }
+}
+function setTilesEnabled(enabled){
+  [btnClockIn, btnMeal, btnClockOut, btnTimesheet].forEach(t => enabled ? t.classList.remove("disabled") : t.classList.add("disabled"));
+}
+
+function updateClock(){
+  const d = new Date();
+  let h = d.getHours();
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12 || 12;
+  timeEl.textContent = `${h}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")} ${ampm}`;
+  dateEl.textContent = `${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}/${d.getFullYear()}`;
+}
+setInterval(updateClock, 250);
+updateClock();
+
+async function loadDeviceKey(){
+  const r = await fetch("/device/device.key", { cache:"no-store" });
+  if(!r.ok) throw new Error("device.key not found");
+  const k = (await r.text()).trim();
+  if(!k) throw new Error("device.key empty");
+  return k;
+}
+
+/* Kiosk state */
+let kiosk = {
+  authorized:false,
+  deviceKey:"",
+  companyId:"",
+  siteId:"",
+  companyName:"",
+  deviceName:"",
+  usersPath:"" // optional override, like "1001/users"
+};
+
+/* Scan modal (numbers only) */
+let scanning=false;
+let badgeBuffer="";
+let lastKeyAt=0;
+let submitTimer=null;
+let activeAction=null;
+
+function showMsg(text, ok){
+  scanMsg.textContent = text;
+  scanMsg.className = "msg " + (ok ? "ok" : "bad");
+}
+
+function openScan(action){
+  activeAction = action;
+  scanMsg.textContent = "";
+  scanMsg.className = "msg";
+  badgeBuffer = "";
+  badgePreview.textContent = "—";
+
+  if(action==="clockIn") scanTitle.textContent="Clock In";
+  else if(action==="meal") scanTitle.textContent="Meal In/Out";
+  else if(action==="clockOut") scanTitle.textContent="Clock Out";
+  else scanTitle.textContent="Scan";
+
+  scanSub.textContent="Scan badge (numbers only). Auto-submit when scan finishes.";
+  scanModal.style.display="flex";
+  scanning=true;
+  lastKeyAt=Date.now();
+}
+
+function closeScan(){
+  scanning=false;
+  scanModal.style.display="none";
+  badgeBuffer="";
+  badgePreview.textContent="—";
+  scanMsg.textContent="";
+  scanMsg.className="msg";
+  activeAction=null;
+  if(submitTimer){ clearTimeout(submitTimer); submitTimer=null; }
+}
+
+function scheduleAutoSubmit(){
+  if(submitTimer) clearTimeout(submitTimer);
+  submitTimer = setTimeout(() => {
+    submitTimer=null;
+    if(scanning && badgeBuffer.length>0) submitBadge(badgeBuffer);
+  }, 450);
+}
+
+window.addEventListener("keydown", (e) => {
+  if(!scanning) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  if(e.key === "Escape"){ closeScan(); return; }
+  if(e.key === "Enter"){ if(badgeBuffer.length>0) submitBadge(badgeBuffer); return; }
+
+  if(!(e.key >= "0" && e.key <= "9")) return;
+
+  const now = Date.now();
+  if(now - lastKeyAt > 1200) badgeBuffer = "";
+  lastKeyAt = now;
+
+  badgeBuffer += e.key;
+  badgePreview.textContent = badgeBuffer;
+  scheduleAutoSubmit();
+}, true);
+
+scanClose.addEventListener("click", closeScan);
+scanModal.addEventListener("click", (e) => { if(e.target === scanModal) closeScan(); });
+
+/* Optional override: convert "1001/users" into CollectionReference */
+function colFromPath(path){
+  const parts = String(path || "").split("/").filter(Boolean);
+  if(parts.length < 1 || parts.length % 2 === 0){
+    throw new Error("usersPath must point to a COLLECTION (odd segments). Example: 1001/users");
+  }
+  let ref = db;
+  for(let i=0;i<parts.length;i++){
+    ref = (i % 2 === 0) ? ref.collection(parts[i]) : ref.doc(parts[i]);
+  }
+  return ref;
+}
+
+/* Users lookup (companyId root collection FIRST) */
+function userCollections(companyId){
+  const cols = [];
+
+  // 1) exact override if you set it (example: "1001/users")
+  if(kiosk.usersPath){
+    try { cols.push(colFromPath(kiosk.usersPath)); } catch(e){}
+  }
+
+  // 2) YOUR REAL STRUCTURE: /{companyId}/users/{userId}
+  cols.push(db.collection(companyId).collection("users"));
+
+  // 3) extra fallbacks (harmless)
+  cols.push(db.collection("companies").doc(companyId).collection("users"));
+  cols.push(db.collection("company").doc(companyId).collection("users"));
+
+  const seen = new Set();
+  return cols.filter(c => {
+    const p = c.path;
+    if(seen.has(p)) return false;
+    seen.add(p);
+    return true;
+  });
+}
+
+function getBadgeFromProfile(p){
+  return String(
+    p.badge ?? p.BadgeId ?? p.badgeId ?? p.employeeId ?? p.EmployeeID ?? p.idNumber ?? ""
+  ).trim();
+}
+
+function hasSiteAccess(profileSites, siteId){
+  const sites = Array.isArray(profileSites) ? profileSites.map(String) : [];
+  return sites.includes(String(siteId));
+}
+
+function punchNumber(){ return String(Date.now()); }
+
+async function findUserByBadge(companyId, scanned){
+  const badge = String(scanned).trim();
+  if(!badge) return null;
+
+  const fields = ["badge","BadgeId","badgeId","employeeId","EmployeeID","idNumber"];
+
+  for(const col of userCollections(companyId)){
+    // doc-id match
+    const direct = await col.doc(badge).get();
+    if(direct.exists){
+      return { userId: direct.id, profile: direct.data() || {}, userRef: direct.ref };
+    }
+    // field matches
+    for(const f of fields){
+      const q = await col.where(f,"==",badge).limit(1).get();
+      if(!q.empty){
+        const doc = q.docs[0];
+        return { userId: doc.id, profile: doc.data() || {}, userRef: doc.ref };
+      }
+    }
+  }
+  return null;
+}
+
+async function writePunch(found, type){
+  const id = punchNumber();
+  await found.userRef.collection("punches").doc(id).set({
+    punchNumber: id,
+    type,
+    ts: firebase.firestore.FieldValue.serverTimestamp(),
+    siteId: kiosk.siteId || "",
+    companyId: kiosk.companyId,
+    deviceKey: kiosk.deviceKey,
+    deviceName: kiosk.deviceName || "",
+    companyName: kiosk.companyName || "",
+    sName: found.profile && found.profile.sName ? String(found.profile.sName) : "",
+    badge: getBadgeFromProfile(found.profile)
+  }, { merge:true });
+}
+
+async function getUserState(found){
+  const snap = await found.userRef.collection("punches").orderBy("ts","desc").limit(50).get();
+  let lastClock=null;
+  let firstMealType=null;
+  snap.forEach(doc => {
+    const p = doc.data() || {};
+    const t = String(p.type || "");
+    if(!lastClock && (t==="clockIn" || t==="clockOut")) lastClock = t;
+    if(!firstMealType && (t==="mealIn" || t==="mealOut")) firstMealType = t;
+  });
+  return { clockedIn:(lastClock==="clockIn"), mealOpen:(firstMealType==="mealIn") };
+}
+
+async function submitBadge(scannedRaw){
+  const scanned = String(scannedRaw).trim();
+  if(!scanned){ showMsg("Invalid badge.", false); return; }
+
+  scanning=false;
+  badgePreview.textContent=scanned;
+  showMsg("Checking…", true);
+
+  try{
+    if(!kiosk.authorized){ showMsg("Device not authorized.", false); scanning=true; return; }
+    if(!kiosk.companyId){ showMsg("Missing company-id on kiosk.", false); scanning=true; return; }
+    if(!kiosk.siteId){ showMsg("Missing siteId on kiosk.", false); scanning=true; return; }
+
+    const found = await findUserByBadge(kiosk.companyId, scanned);
+    if(!found){
+      showMsg("User not found", false);
+      scanning=true; badgeBuffer="";
+      return;
+    }
+
+    const profile = found.profile || {};
+
+    if(profile.enabled !== true){
+      showMsg("Employee disabled.", false);
+      scanning=true; badgeBuffer="";
+      return;
+    }
+
+    if(!hasSiteAccess(profile.Sites, kiosk.siteId)){
+      showMsg("No access to this site.", false);
+      scanning=true; badgeBuffer="";
+      return;
+    }
+
+    const state = await getUserState(found);
+
+    if(activeAction === "clockIn"){
+      await writePunch(found, "clockIn");
+      showMsg((profile.sName ? profile.sName : "User") + " clocked in!", true);
+      setTimeout(closeScan, 1400);
+      return;
+    }
+
+    if(activeAction === "meal"){
+      const next = state.mealOpen ? "mealOut" : "mealIn";
+      await writePunch(found, next);
+      showMsg((profile.sName ? profile.sName : "User") + " " + (next==="mealIn" ? "Meal In" : "Meal Out") + "!", true);
+      setTimeout(closeScan, 1400);
+      return;
+    }
+
+    if(activeAction === "clockOut"){
+      if(!state.clockedIn){ showMsg("You are not clocked in.", false); scanning=true; badgeBuffer=""; return; }
+      if(state.mealOpen){ showMsg("Meal is active. Punch Meal Out first.", false); scanning=true; badgeBuffer=""; return; }
+
+      await writePunch(found, "clockOut");
+      showMsg((profile.sName ? profile.sName : "User") + " clocked out!", true);
+      setTimeout(closeScan, 1400);
+      return;
+    }
+
+    showMsg("Unknown action.", false);
+    scanning=true;
+
+  }catch(e){
+    showMsg("Error: " + (e && e.message ? e.message : String(e)), false);
+    scanning=true;
+  }
+}
+
+/* Buttons */
+btnClockIn.addEventListener("click", () => { if(kiosk.authorized) openScan("clockIn"); });
+btnMeal.addEventListener("click", () => { if(kiosk.authorized) openScan("meal"); });
+btnClockOut.addEventListener("click", () => { if(kiosk.authorized) openScan("clockOut"); });
+btnTimesheet.addEventListener("click", () => {});
+
+/* Live kiosk listener */
+let unsubscribe=null;
+let retryTimer=null;
+
+function scheduleRetry(startFn){
+  if(retryTimer) return;
+  retryTimer = setTimeout(() => { retryTimer=null; startFn(); }, 3000);
+}
+
+(async () => {
+  try{
+    setStatus(false);
+    setTilesEnabled(false);
+    siteLabel.textContent = "Site —";
+
+    kiosk.deviceKey = await loadDeviceKey();
+    const ref = db.collection("kiosks").doc(kiosk.deviceKey);
+
+    const startListener = () => {
+      if(unsubscribe){ try{ unsubscribe(); }catch(e){} unsubscribe=null; }
+      statusText.textContent = "Connecting…";
+
+      unsubscribe = ref.onSnapshot((snap) => {
+        if(!snap.exists){
+          kiosk.authorized=false;
+          setStatus(false);
+          setTilesEnabled(false);
+          buildVersionEl.textContent="v—";
+          companyCell.textContent="Kiosk Not Found";
+          deviceCell.textContent=kiosk.deviceKey;
+          siteLabel.textContent="Site —";
+          if(scanModal.style.display==="flex") closeScan();
+          return;
+        }
+
+        const d = snap.data() || {};
+        const enabled = (d.enabled === true);
+
+        kiosk.authorized = enabled;
+        kiosk.companyId = safeStr(d["company-id"] || d.companyId || "").trim(); // should be "1001"
+        kiosk.siteId = safeStr(d.siteId || "").trim(); // "0001"
+        kiosk.companyName = safeStr(d.Company || "");
+        kiosk.deviceName = safeStr(d["device-name"] || d.deviceName || "");
+        kiosk.usersPath = safeStr(d.usersPath || "").trim(); // OPTIONAL: "1001/users"
+
+        setStatus(enabled);
+        setTilesEnabled(enabled);
+
+        buildVersionEl.textContent = d["build-version"] ? ("v" + d["build-version"]) : "v—";
+        companyCell.textContent = kiosk.companyName || "—";
+        deviceCell.textContent = kiosk.deviceName || kiosk.deviceKey;
+        siteLabel.textContent = "Site " + (kiosk.siteId || "—");
+
+        if(!enabled && scanModal.style.display==="flex") closeScan();
+
+      }, () => {
+        kiosk.authorized=false;
+        setStatus(false);
+        setTilesEnabled(false);
+        statusText.textContent="Not Authorized";
+        if(scanModal.style.display==="flex") closeScan();
+        scheduleRetry(startListener);
+      });
+    };
+
+    startListener();
+
+  }catch(e){
+    kiosk.authorized=false;
+    setStatus(false);
+    setTilesEnabled(false);
+    companyCell.textContent="ERROR";
+    deviceCell.textContent = (e && e.message) ? e.message : String(e);
+    buildVersionEl.textContent="v—";
+    siteLabel.textContent="Site —";
+  }
+})();
+</script>
+</body>
+</html>
